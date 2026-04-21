@@ -12,69 +12,72 @@ try:
 except ImportError:
     client = None
 
-# Simple in-memory vector store
+# Simple in-memory vector store for evaluation
 class SimpleVectorStore:
-    def __init__(self):
-        self.documents = []
-        self.ids = []
-    
-    def add(self, doc_id: str, content: str, metadata: dict = None):
-        self.ids.append(doc_id)
-        self.documents.append({
-            "id": doc_id,
-            "content": content,
-            "metadata": metadata or {}
-        })
-    
-    def search(self, query: str, top_k: int = 3) -> List[Dict]:
-        """Simple keyword-based search (can be replaced with embeddings)."""
-        query_lower = query.lower()
-        scores = []
+        def __init__(self):
+            self.documents = []
+            self.ids = []
         
-        for i, doc in enumerate(self.documents):
-            score = 0
-            query_words = query_lower.split()
-            content_lower = doc["content"].lower()
+        def add(self, doc_id: str, content: str, metadata: dict = None):
+            self.ids.append(doc_id)
+            self.documents.append({
+                "id": doc_id,
+                "content": content,
+                "metadata": metadata or {}
+            })
+        
+        def search(self, query: str, top_k: int = 3) -> List[Dict]:
+            """Simple keyword-based search."""
+            query_lower = query.lower()
+            scores = []
             
-            for word in query_words:
-                if len(word) > 2:
-                    if word in content_lower:
-                        score += 1
+            for i, doc in enumerate(self.documents):
+                score = 0
+                query_words = query_lower.split()
+                content_lower = doc["content"].lower()
+                
+                for word in query_words:
+                    if len(word) > 2:
+                        if word in content_lower:
+                            score += 1
+                
+                scores.append((i, score))
             
-            scores.append((i, score))
-        
-        scores.sort(key=lambda x: x[1], reverse=True)
-        
-        results = []
-        for idx, score in scores[:top_k]:
-            if score > 0:
-                results.append({
-                    "id": self.documents[idx]["id"],
-                    "content": self.documents[idx]["content"],
-                    "score": score,
-                    "metadata": self.documents[idx]["metadata"]
-                })
-        
-        return results
-
-# Global vector store
+            scores.sort(key=lambda x: x[1], reverse=True)
+            
+            results = []
+            for idx, score in scores[:top_k]:
+                if score > 0:
+                    results.append({
+                        "id": self.documents[idx]["id"],
+                        "content": self.documents[idx]["content"],
+                        "score": score,
+                        "metadata": self.documents[idx]["metadata"]
+                    })
+            
+            return results
+    
 vector_store = SimpleVectorStore()
 
+# Load documents into vector store
 def load_documents():
-    """Load all articles into the vector store."""
-    articles_dir = "articles"
-    
-    for filename in os.listdir(articles_dir):
-        if filename.endswith(".md"):
-            filepath = os.path.join(articles_dir, filename)
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
-                if len(content) > 5000:
-                    content = content[:5000] + "..."
-                vector_store.add(filename, content, {"source": filename})
+        """Load all articles into the vector store."""
+        articles_dir = "articles"
+        
+        if not os.path.exists(articles_dir):
+            return
+        
+        for filename in os.listdir(articles_dir):
+            if filename.endswith(".md"):
+                filepath = os.path.join(articles_dir, filename)
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if len(content) > 5000:
+                        content = content[:5000] + "..."
+                    vector_store.add(filename, content, {"source": filename})
 
-# Load documents on module import
 load_documents()
+print(f"✅ Loaded {len(vector_store.documents)} documents into SimpleVectorStore")
 
 class MainAgentV1:
     """

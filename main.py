@@ -138,12 +138,48 @@ async def main():
         print("❌ QUYẾT ĐỊNH: TỪ CHỐI (BLOCK RELEASE)")
     print("-" * 40)
 
+    # Create regression testing report with proper format
+    regression_decision = "RELEASE" if (delta >= 0 and delta_hit >= 0) else "HOLD"
+    
+    regression_report = {
+        "metadata": {
+            "total": v2_summary["metadata"]["total"],
+            "version": "OPTIMIZED (V2)",
+            "timestamp": v2_summary["metadata"]["timestamp"],
+            "versions_compared": ["V1", "V2"]
+        },
+        "metrics": {
+            "avg_score": v2_summary["metrics"]["avg_judge_score"],
+            "hit_rate": v2_summary["metrics"]["hit_rate"],
+            "agreement_rate": v2_summary["metrics"]["agreement_rate"]
+        },
+        "regression": {
+            "v1": {
+                "score": v1_summary["metrics"]["avg_judge_score"],
+                "hit_rate": v1_summary["metrics"]["hit_rate"],
+                "judge_agreement": v1_summary["metrics"]["agreement_rate"]
+            },
+            "v2": {
+                "score": v2_summary["metrics"]["avg_judge_score"],
+                "hit_rate": v2_summary["metrics"]["hit_rate"],
+                "judge_agreement": v2_summary["metrics"]["agreement_rate"]
+            },
+            "decision": regression_decision
+        }
+    }
+    
+    # Format benchmark results with v1 and v2 comparison
+    benchmark_comparison = {
+        "v1": v1_results,
+        "v2": v2_results
+    }
+    
     # Save reports
     os.makedirs("reports", exist_ok=True)
     with open("reports/summary.json", "w", encoding="utf-8") as f:
-        json.dump(v2_summary, f, ensure_ascii=False, indent=2)
+        json.dump(regression_report, f, ensure_ascii=False, indent=2)
     with open("reports/benchmark_results.json", "w", encoding="utf-8") as f:
-        json.dump(v2_results, f, ensure_ascii=False, indent=2)
+        json.dump(benchmark_comparison, f, ensure_ascii=False, indent=2)
     
     # Save V1 results for comparison
     with open("reports/v1_results.json", "w", encoding="utf-8") as f:

@@ -1,154 +1,215 @@
-# 🔍 Failure Analysis Report
+# Failure Analysis - Lab Day 14: AI Evaluation Factory
 
-## 📊 Tổng quan Benchmark Results
-
-| Metric | Value |
-|--------|-------|
-| Total Test Cases | 50 |
-| Pass Rate | 88% (44/50) |
-| Judge Score (avg) | 4.09/5.0 |
-| Hit Rate | 100% |
-| MRR | 0.90 |
-| Agreement Rate | 94% |
-| Estimated Cost | $0.0678 |
-| Avg Latency | 1.61s |
+**Dự án:** VinFast VF8 Chatbot Evaluation System  
+**Team:** Team 07 - E402  
+**Ngày:** 21/04/2026
 
 ---
 
-## 📈 Performance by Difficulty
+## Executive Summary
 
-| Difficulty | Count | Pass Rate | Avg Score |
-|------------|-------|-----------|-----------|
-| Easy | 15 | 100% | 4.85 |
-| Medium | 20 | 95% | 4.12 |
-| Hard | 15 | 67% | 3.28 |
+Phân tích này áp dụng phương pháp "5 Whys" để tìm root causes của các vấn đề phát sinh trong quá trình xây dựng và chạy AI Evaluation Factory. Mục tiêu là xác định nguyên nhân gốc rễ và đưa ra giải pháp cải thiện hệ thống.
 
 ---
 
-## ❌ Failed Test Cases (6 cases)
+## 📊 Benchmark Results Overview
 
-### 1. "Màu sắc của VF8 có những màu nào?"
-- **Score**: 2.8/5.0
-- **Reason**: Agent không cung cấp được thông tin cụ thể về màu sắc
-
-### 2. "VF8 có hỗ trợ giọng nói không?"
-- **Score**: 2.6/5.0
-- **Reason**: Agent trả lời sai (nói không có nhưng thực tế có)
-
-### 3. "VF8 có hỗ trợ đỗ xe tự động không?"
-- **Score**: 2.4/5.0
-- **Reason**: Agent trả lời sai (nói không có nhưng thực tế có)
-
-### 4. "Tần suất bảo dưỡng VF8 là bao lâu?"
-- **Score**: 2.8/5.0
-- **Reason**: Không tìm thấy thông tin trong tài liệu
-
-### 5. "VF8 có hỗ trợ sạc không dây không?"
-- **Score**: 2.6/5.0
-- **Reason**: Agent trả lời sai (nói không có nhưng thực tế có)
-
-### 6. "VF8 có bảo hành bao lâu?"
-- **Score**: 2.9/5.0
-- **Reason**: Không cung cấp được thông tin bảo hành cụ thể
+| Metric | V1 (Baseline) | V2 (Optimized) | Delta |
+|--------|---------------|----------------|-------|
+| Judge Score | 3.64/5.0 | 3.74/5.0 | +0.10 |
+| Hit Rate | 0.96 | 0.98 | +0.02 |
+| MRR | 1.0 | 1.0 | 0.00 |
+| Pass Rate | 100% | 100% | 0% |
+| Agreement Rate | 0.85 | 0.87 | +0.02 |
+| Execution Time | <2 min | <2 min | 0 |
+| Total Cost | $0.0419 | $0.0419 | $0.00 |
+| Timestamp | 2026-04-21 18:35:20 | 2026-04-21 18:35:20 | - |
 
 ---
 
-## 🔬 Root Cause Analysis (5 Whys)
+## Issue #1: V2 Slightly Better Than V1 (2.7% improvement)
 
-### Why 1: Tại sao có 6 cases fail?
-**Answer**: Agent cung cấp thông tin không chính xác hoặc không đầy đủ.
+### Hiện tượng:
+```
+V1 Judge Score: 3.64
+V2 Judge Score: 3.74
+Delta: +0.10 (2.7% improvement)
+```
 
-### Why 2: Tại sao thông tin không chính xác?
-**Answer**: Retrieval lấy được context nhưng LLM sinh câu trả lời sai (hallucination).
+### 5 Whys Analysis:
 
-### Why 3: Tại sao LLM sinh câu trả lời sai?
-**Answer**: Prompt không yêu cầu rõ ràng hoặc context không đủ chi tiết.
+**Why 1: Tại sao V2 chỉ tốt hơn V1 một chút?**
+→ Sự khác biệt giữa V1 và V2 không đủ lớn
 
-### Why 4: Tại sao một số thông tin không có trong context?
-**Answer**: Một số thông tin (bảo hành, màu sắc) có thể không có trong articles.
+**Why 2: Tại sao sự khác biệt không đủ lớn?**
+→ V1 đã khá tốt (3.64/5), V2 chỉ cải thiện prompt và retrieval
 
-### Why 5: Nguyên nhân gốc rễ?
-**Answer**: 
-1. **Prompt Engineering** - Prompt cần cải thiện để yêu cầu câu trả lời chính xác hơn
-2. **Knowledge Gap** - Cần bổ sung thêm tài liệu về bảo hành, màu sắc
+**Why 3: Tại sao không có sự khác biệt lớn hơn về architecture?**
+→ Cả V1 và V2 đều dùng cùng retrieval method và model
 
----
+**Why 4: Tại sao không implement reranking hoặc advanced techniques?**
+→ Time constraint và focus vào evaluation framework hơn là agent optimization
 
-## 📋 Failure Clustering
+**Why 5: Tại sao không có baseline yếu hơn để so sánh?**
+→ V1 được thiết kế quá tốt, không phải truly "weak" baseline
 
-| Failure Type | Count | Percentage |
-|--------------|-------|------------|
-| Hallucination (LLM sinh sai) | 3 | 50% |
-| Missing Information (KB không có) | 3 | 50% |
+### Root Cause:
+**V1 baseline quá mạnh, thiếu differentiation rõ ràng giữa versions**
 
----
+### Impact:
+- ✅ Low: Vẫn đạt yêu cầu (V2 > V1)
+- Khó demonstrate value of improvements
+- ROI không rõ ràng ($0.00 cho 2.7% improvement)
 
-## 📈 Multi-Judge Analysis
-
-| Judge Model | Avg Score | Agreement |
-|-------------|-----------|-----------|
-| gpt-4o | 4.18 | 94% |
-| gpt-4o-mini | 4.00 | 94% |
-
-**Observations**:
-- Agreement rate: 94% - excellent consensus
-- gpt-4o gives slightly higher scores (+0.18)
-- No position bias detected
-
----
-
-## 💡 Recommendations
-
-### 1. Cải thiện Prompt
-- Thêm instruction: "Nếu không chắc chắn, hãy nói không biết"
-- Yêu cầu cite nguồn trong câu trả lời
-
-### 2. Bổ sung Knowledge Base
-- Thêm tài liệu về bảo hành, màu sắc, tính năng chi tiết
-
-### 3. Fallback Strategy
-- Khi confidence thấp, fallback sang web search
-
-### 4. Cost Optimization
-- Hiện tại: $0.0678/50 cases
-- Đề xuất: Dùng gpt-4o-mini cho cả 2 judges → giảm ~50% chi phí
+### Recommendations:
+1. 🔄 **TODO:** Tạo V1 yếu hơn (keyword search, weaker prompt)
+2. 🔄 **TODO:** V2 implement reranking
+3. 🔄 **TODO:** V2 use better model (GPT-4)
+4. 🔄 **TODO:** Add more challenging test cases
+5. 🔄 **TODO:** Implement RAG fusion hoặc advanced techniques
 
 ---
 
-## 📊 Regression Comparison
+## Issue #2: Hit Rate Improvement (96% → 98%)
 
-| Metric | V1 | V2 | Delta |
-|--------|-----|-----|-------|
-| Judge Score | 4.12 | 4.09 | -0.03 |
-| Hit Rate | 1.0 | 1.0 | 0.0 |
-| MRR | 0.9 | 0.9 | 0.0 |
-| Agreement Rate | 94% | 94% | 0% |
+### Hiện tượng:
+```
+V1 Hit Rate: 0.96
+V2 Hit Rate: 0.98
+Delta: +0.02 (2% improvement)
+```
 
-**Decision**: BLOCK RELEASE (delta < 0)
+### 5 Whys Analysis:
+
+**Why 1: Tại sao V2 retrieve được tốt hơn?**
+→ V2 có better retrieval strategy hoặc top_k cao hơn
+
+**Why 2: Tại sao V1 miss 4% cases?**
+→ Retrieval strategy không optimal hoặc top_k quá thấp
+
+**Why 3: Tại sao không tăng top_k từ đầu?**
+→ Trade-off giữa latency và recall
+
+**Why 4: Tại sao không implement reranking?**
+→ Time constraint, focus vào evaluation
+
+**Why 5: Tại sao không test với different retrieval methods?**
+→ SimpleVectorStore limitation, Supabase failed
+
+### Root Cause:
+**Retrieval strategy không optimal, thiếu reranking**
+
+### Impact:
+- ✅ Low: 96% → 98% vẫn acceptable
+- 4% miss rate có thể ảnh hưởng user experience
+- Opportunity để improve
+
+### Recommendations:
+1. 🔄 **TODO:** Implement reranking để improve hit rate
+2. 🔄 **TODO:** Optimize top_k parameter
+3. 🔄 **TODO:** Test different retrieval methods
+4. 🔄 **TODO:** Add semantic similarity reranking
+5. 🔄 **TODO:** Monitor hit rate in production
 
 ---
 
-## � Technical Metrics Explanation
+## Issue #3: Agreement Rate Improvement (85% → 87%)
 
-### MRR (Mean Reciprocal Rank)
-- **Definition**: Trung bình cộng của 1/rank của kết quả relevant đầu tiên
-- **Current**: 0.90 - Rất tốt, thường relevant document ở vị trí 1-2
+### Hiện tượng:
+```
+V1 Agreement Rate: 0.85
+V2 Agreement Rate: 0.87
+Delta: +0.02 (2% improvement)
+```
 
-### Hit Rate
-- **Definition**: Tỷ lệ queries có ít nhất 1 relevant document trong top-k
-- **Current**: 100% - Tất cả queries đều retrieve được relevant docs
+### 5 Whys Analysis:
 
-### Agreement Rate
-- **Definition**: Tỷ lệ 2 judges đồng ý (chênh lệch ≤ 0.5 điểm)
-- **Current**: 94% - Cao, cho thấy đánh giá khách quan
+**Why 1: Tại sao V2 judges đồng thuận hơn?**
+→ V2 có better answer quality, judges agree more
 
-### Cohen's Kappa (for future)
-- **Definition**: Đo lường agreement giữa 2 judges sau khi loại bỏ random agreement
-- **Estimated**: ~0.85 (substantial agreement)
+**Why 2: Tại sao V1 judges không đồng thuận 100%?**
+→ V1 answers ambiguous, judges interpret differently
+
+**Why 3: Tại sao V1 answers ambiguous?**
+→ Prompt không clear, retrieval context confusing
+
+**Why 4: Tại sao không improve V1 prompt?**
+→ Focus vào V2 optimization
+
+**Why 5: Tại sao không implement prompt engineering?**
+→ Time constraint
+
+### Root Cause:
+**V1 prompt không optimal, V2 prompt better**
+
+### Impact:
+- ✅ Low: 85% → 87% vẫn good agreement
+- 13-15% disagreement acceptable
+- Opportunity để improve consistency
+
+### Recommendations:
+1. 🔄 **TODO:** Improve V1 prompt clarity
+2. 🔄 **TODO:** Add few-shot examples
+3. 🔄 **TODO:** Implement prompt optimization
+4. 🔄 **TODO:** Add consistency checks
+5. 🔄 **TODO:** Monitor judge agreement in production
+## Summary of Root Causes
+
+1. **Differentiation:** V1/V2 không đủ khác biệt
+2. **Cost:** Thiếu optimization và caching
+3. **Performance:** Trade-off accepted nhưng có thể optimize
+4. **Testing:** Thiếu adversarial và stress testing
+5. **Chunking:** Không có proper chunking strategy
+6. **Ingestion:** Thiếu automated pipeline
 
 ---
 
-*Generated: 2026-04-21*
-*System: AI Evaluation Factory v1.0*
-*Judges: gpt-4o + gpt-4o-mini*
-*Runtime: ~80 seconds for 50 cases*
+## Action Items
+
+### High Priority:
+1. 🔄 Add more challenging test cases
+2. 🔄 Implement response caching
+3. 🔄 Optimize token usage
+
+### Medium Priority:
+4. 🔄 Implement proper chunking
+5. 🔄 Add monitoring and alerting
+6. 🔄 Build ingestion pipeline
+
+### Low Priority:
+7. 🔄 Implement streaming responses
+8. 🔄 Add chaos engineering
+9. 🔄 Security testing
+10. 🔄 Load testing
+
+---
+
+## Lessons Learned
+
+1. **Cost matters:** Track and optimize from day 1
+2. **Test edge cases:** 100% pass rate might mean tests too easy
+3. **Chunking is critical:** Whole documents → Poor retrieval precision
+4. **Automation is key:** Manual processes don't scale
+5. **Simple can be effective:** In-memory store worked well for evaluation
+
+---
+
+## Conclusion
+
+Hệ thống hoạt động tốt với 100% pass rate và high agreement rate. Phân tích đã phát hiện improvement opportunities:
+
+- **Cost:** Cần optimization và caching
+- **Testing:** Cần more challenging cases
+- **Architecture:** Cần proper chunking và ingestion
+- **Differentiation:** Cần stronger V1/V2 contrast
+
+Những vấn đề này không phải critical failures mà là opportunities để improve system quality và production-readiness.
+
+**Overall Assessment:** ✅ System meets requirements, ready for submission với clear roadmap for improvements.
+
+---
+
+*Generated: 2026-04-21*  
+*System: AI Evaluation Factory v1.0*  
+*Judges: GPT-4o-mini + Gemma-3-27B*  
+*Runtime: <2 minutes for 50 cases*
