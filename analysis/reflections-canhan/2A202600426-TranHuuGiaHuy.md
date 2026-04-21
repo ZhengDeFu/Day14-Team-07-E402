@@ -9,7 +9,7 @@
 
 ## 1. Engineering Contribution (15/15 điểm)
 
-### Module phụ trách: Integration, Async Pipeline & Regression Testing + Monitoring & Alerting
+### Module phụ trách: Integration, Async Pipeline, Regression Testing, Monitoring & Alerting
 
 **Đóng góp cụ thể:**
 
@@ -28,48 +28,32 @@
    - Cost tracking và token usage
 
 3. **Monitoring & Alerting System:**
-   - Implement performance monitoring:
-     ```python
-     class PerformanceMonitor:
-         def record_latency(self, operation, latency)
-         def record_cost(self, operation, cost)
-         def record_tokens(self, operation, tokens)
-         def get_summary()
-     ```
-   - Implement alerting system:
-     ```python
-     class AlertingSystem:
-         def check_latency(self, latency, threshold=5000ms)
-         def check_cost(self, cost, threshold=$0.01)
-         def check_error_rate(self, errors, total, threshold=5%)
-         def get_alerts()
-     ```
-   - Real-time monitoring dashboard
-   - Alert notifications for anomalies
-   - Performance metrics tracking
+   - Tích hợp module `engine/monitoring.py` để theo dõi tiến độ benchmark theo từng batch.
+   - Chuẩn hóa log trạng thái khi chạy dài để dễ phát hiện case treo hoặc timeout.
+   - Bổ sung cảnh báo khi xuất hiện test lỗi trong V2 (in ra terminal và lưu vào report).
+   - Tổng hợp thêm thống kê diagnostics (failed cases, throughput) trong `reports/summary.json`.
+   - Giữ pipeline an toàn khi gián đoạn bằng cơ chế xử lý lỗi theo từng test case.
 
 4. **Architecture Design:**
    ```python
    class BenchmarkRunner:
-       async def run_all(self, dataset):
-           # Batch processing
-           batches = [dataset[i:i+5] for i in range(0, len(dataset), 5)]
-           
-           all_results = []
-           for batch in batches:
-               # Parallel execution within batch
-               tasks = [self.run_single(case) for case in batch]
-               results = await asyncio.gather(*tasks)
-               all_results.extend(results)
-           
-           return all_results
+       async def run_all(self, dataset, batch_size=5):
+           results = []
+           for i in range(0, len(dataset), batch_size):
+               batch = dataset[i:i + batch_size]
+               tasks = [self.run_single_test(case) for case in batch]
+               batch_results = await asyncio.gather(*tasks)
+               results.extend(batch_results)
+           return results
    ```
+   - Điểm mình tối ưu thêm: fallback kết quả fail-safe cho từng test case để không làm vỡ toàn bộ run khi gặp lỗi cục bộ.
+   - Bổ sung hàm so sánh hồi quy (`run_regression_comparison`) để tái sử dụng logic tính delta score/hit-rate.
 
 5. **Report Generation:**
-   - `reports/summary.json`: Regression testing results
+   - `reports/summary.json`: Regression report + diagnostics (failed cases, throughput)
    - `reports/benchmark_results.json`: V1 vs V2 detailed results
    - `reports/v1_results.json`: V1 baseline results
-   - `reports/monitoring.json`: Performance monitoring data
+   - Chuẩn hóa dữ liệu so sánh bằng `run_regression_comparison` để giảm lệch số liệu khi tổng hợp báo cáo.
 
 **Git commits:**
 - `feat: implement async benchmark runner`
@@ -208,61 +192,33 @@
 - **Kết quả:** Pipeline completes successfully
 
 **Challenge 2: Error Handling in Parallel Execution**
-- **Vấn đề:** 1 task fail → Whole batch fail
-- **Root cause:** No error isolation
+- **Vấn đề:** 1 task fail có thể làm sai lệch kết quả tổng hợp benchmark
+- **Root cause:** Thiếu chuẩn fallback thống nhất khi một test case gặp lỗi runtime
 - **Giải pháp:**
-  - Wrap each task in try-except
-  - Continue on error
-  - Log failures for review
-- **Kết quả:** 100% completion rate
+  - Bổ sung try/except trực tiếp trong `run_single_test`
+  - Trả về cấu trúc fail-safe (status=fail + error message + default metrics)
+  - Vẫn giữ pipeline chạy hết batch để đảm bảo không mất dữ liệu toàn bộ phiên benchmark
+- **Kết quả:** Benchmark không bị vỡ giữa chừng, đồng thời vẫn truy vết được case lỗi cụ thể.
 
 **Challenge 3: Report Format Consistency**
-- **Vấn đề:** Different report formats for V1 vs V2
-- **Root cause:** Inconsistent data structure
+- **Vấn đề:** Số liệu in terminal và số liệu trong file report có nguy cơ lệch khi tính lặp ở nhiều chỗ
+- **Root cause:** Logic delta score/hit-rate trước đây chưa gom về một điểm tính trung tâm
 - **Giải pháp:**
-  - Define schema: metadata, metrics, regression
-  - Validate before save
-  - Use JSON schema
-- **Kết quả:** Consistent format across reports
+  - Đưa phép so sánh V1/V2 vào `run_regression_comparison`
+  - Reuse kết quả comparison khi in log và khi ghi `reports/summary.json`
+  - Bổ sung diagnostics (failed cases, throughput) để đọc nhanh trạng thái run
+- **Kết quả:** Báo cáo nhất quán hơn, dễ kiểm tra hồi quy theo từng lần chạy.
 
-**Challenge 4: Implementing Distributed Processing**
-- **Vấn đề:** Single machine bottleneck, cần scale to multiple machines
+**Challenge 4: Theo dõi tiến độ khi benchmark chạy dài**
+- **Vấn đề:** Khi chạy full dataset, khó nhận biết tiến độ và trạng thái real-time nếu chỉ xem log cuối.
 - **Giải pháp:**
-  - Implement task queue (Redis, RabbitMQ)
-  - Implement worker pool (multiple processes/machines)
-  - Implement result aggregation
-  - Implement load balancing
-  ```python
-  class DistributedProcessingCoordinator:
-      def __init__(self, num_workers=4):
-          self.num_workers = num_workers
-          self.worker_stats = {i: {"processed": 0, "errors": 0} 
-                              for i in range(num_workers)}
-      
-      def assign_task(self, task_id):
-          # Assign to least-loaded worker
-          worker_id = min(self.worker_stats.keys(), 
-                         key=lambda w: self.worker_stats[w]["processed"])
-          self.worker_stats[worker_id]["processed"] += 1
-          return worker_id
-      
-      def get_load_balance(self):
-          # Calculate load balance score (0-1, 1 = perfect)
-          processed = [s["processed"] for s in self.worker_stats.values()]
-          if not processed or max(processed) == 0:
-              return 1.0
-          avg = sum(processed) / len(processed)
-          variance = sum((p - avg) ** 2 for p in processed) / len(processed)
-          max_variance = max(processed) ** 2
-          return 1.0 - (variance / max_variance) if max_variance > 0 else 1.0
-  ```
-  - Implement fault tolerance (retry failed tasks)
-  - Implement monitoring (track worker health)
-- **Results:**
-  - Distributed processing successfully implemented
-  - Load balancing score: 0.95 (excellent)
-  - Fault tolerance: 100% task completion
-  - Scalability: Can handle 1000+ cases with multiple workers
+  - Dùng monitor script để cập nhật tiến độ theo chu kỳ và hỗ trợ dừng an toàn.
+  - Bổ sung thống kê failed cases ngay sau khi so sánh V1/V2.
+  - In throughput ước lượng để kiểm tra nhanh hiệu năng giữa 2 phiên bản.
+- **Kết quả:**
+  - Dễ giám sát hơn trong lúc chạy benchmark.
+  - Khi có lỗi cục bộ vẫn thấy rõ số lượng fail, không cần chờ đến cuối mới phân tích.
+  - Thuận tiện hơn cho việc xác nhận release gate.
 
 ---
 
@@ -270,10 +226,11 @@
 
 **Performance Metrics:**
 - Execution time: <2 minutes for 50 cases ✅
-- Throughput: ~25 cases/minute
+- Throughput: ~25 cases/minute (theo benchmark tổng)
 - Success rate: 100% (50/50 completed)
 - Memory usage: <500MB peak
 - Speedup: 2.5x vs sequential
+- Có thêm throughput xấp xỉ theo case/s để so sánh nhanh V1 và V2 trong terminal log.
 
 **Regression Testing Results (Actual - 2026-04-21 18:35:20):**
 
@@ -332,11 +289,11 @@
 
 ## 7. Next Steps
 
-- Implement distributed processing (multi-machine)
-- Add monitoring and alerting
-- Implement caching layer
-- Add A/B testing framework
-- Optimize cost per query
+- Tiếp tục tinh chỉnh monitor script để cảnh báo sớm khi tỷ lệ fail tăng bất thường.
+- Bổ sung timeout profile theo từng nhóm câu hỏi để giảm run bị kéo dài.
+- Mở rộng diagnostics theo từng batch (không chỉ tổng V1/V2) để truy vết nhanh hơn.
+- Kết hợp thêm thống kê cost/throughput theo từng giai đoạn benchmark.
+- Duy trì kiểm tra hồi quy định kỳ sau mỗi thay đổi ở agent pipeline.
 
 ---
 

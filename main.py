@@ -3,7 +3,6 @@ import json
 import os
 import time
 from engine.runner import BenchmarkRunner
-from engine.retrieval_eval import RetrievalEvaluator
 from engine.llm_judge import LLMJudge
 from agent.main_agent import MainAgentV1, MainAgentV2
 from dotenv import load_dotenv
@@ -113,33 +112,50 @@ async def main():
     print("\n" + "=" * 60)
     print("📊 --- KẾT QUẢ SO SÁNH (REGRESSION) ---")
     print("=" * 60)
-    
-    delta = v2_summary['metrics']['avg_judge_score'] - v1_summary['metrics']['avg_judge_score']
-    delta_hit = v2_summary['metrics']['hit_rate'] - v1_summary['metrics']['hit_rate']
-    delta_mrr = v2_summary['metrics']['mrr'] - v1_summary['metrics']['mrr']
+
+    compare_runner = BenchmarkRunner(v2_agent, ExpertEvaluator(), LLMJudge())
+    comparison = await compare_runner.run_regression_comparison(v1_results, v2_results)
+
+    delta = comparison["delta_score"]
+    delta_hit = comparison["delta_hit_rate"]
+    delta_mrr = comparison["v2_retrieval"]["mrr"] - comparison["v1_retrieval"]["mrr"]
     delta_latency = v2_summary['metrics']['avg_latency_sec'] - v1_summary['metrics']['avg_latency_sec']
     delta_cost = v2_summary['metrics']['estimated_cost_usd'] - v1_summary['metrics']['estimated_cost_usd']
-    
-    print(f"V1 Judge Score: {v1_summary['metrics']['avg_judge_score']}")
-    print(f"V2 Judge Score: {v2_summary['metrics']['avg_judge_score']}")
+
+    print(f"V1 Judge Score: {comparison['v1_score']}")
+    print(f"V2 Judge Score: {comparison['v2_score']}")
     print(f"Delta Score: {'+' if delta >= 0 else ''}{delta:.2f}")
-    print(f"Delta Hit Rate: {'+' if delta_hit >= 0 else ''}{delta_hit:.2f}")
-    print(f"Delta MRR: {'+' if delta_mrr >= 0 else ''}{delta_mrr:.2f}")
+    print(f"Delta Hit Rate: {'+' if delta_hit >= 0 else ''}{delta_hit:.3f}")
+    print(f"Delta MRR: {'+' if delta_mrr >= 0 else ''}{delta_mrr:.3f}")
     print(f"Delta Latency: {'+' if delta_latency >= 0 else ''}{delta_latency:.3f}s")
     print(f"Delta Cost: {'+' if delta_cost >= 0 else ''}${delta_cost:.4f}")
     print(f"V2 Pass Rate: {v2_summary['pass_rate']}%")
     print(f"V2 Est. Cost: ${v2_summary['metrics']['estimated_cost_usd']:.4f}")
 
-    # Auto-Gate Decision
     print("\n" + "-" * 40)
-    if delta >= 0 and delta_hit >= 0:
+    if comparison["decision"] == "APPROVE":
         print("✅ QUYẾT ĐỊNH: CHẤP NHẬN BẢN CẬP NHẬT (APPROVE)")
     else:
         print("❌ QUYẾT ĐỊNH: TỪ CHỐI (BLOCK RELEASE)")
     print("-" * 40)
 
-    # Create regression testing report with proper format
-    regression_decision = "RELEASE" if (delta >= 0 and delta_hit >= 0) else "HOLD"
+    failed_v1 = sum(1 for r in v1_results if r.get("status") == "fail")
+    failed_v2 = sum(1 for r in v2_results if r.get("status") == "fail")
+    print(f"Failed cases: V1={failed_v1}, V2={failed_v2}")
+
+    if failed_v2 > 0:
+        print("⚠️ Có test case lỗi trong V2, đã được đánh dấu trong benchmark_results.json")
+
+    throughput_v1 = round(v1_summary["metadata"]["total"] / max(v1_summary["metrics"]["avg_latency_sec"], 0.001), 2)
+    throughput_v2 = round(v2_summary["metadata"]["total"] / max(v2_summary["metrics"]["avg_latency_sec"], 0.001), 2)
+    print(f"Throughput xấp xỉ: V1={throughput_v1} case/s, V2={throughput_v2} case/s")
+
+    diagnostics = {
+        "failed_cases": {"v1": failed_v1, "v2": failed_v2},
+        "throughput_case_per_sec": {"v1": throughput_v1, "v2": throughput_v2}
+    }
+
+    regression_decision = "RELEASE" if comparison["decision"] == "APPROVE" else "HOLD"
     
     regression_report = {
         "metadata": {
@@ -155,17 +171,25 @@ async def main():
         },
         "regression": {
             "v1": {
-                "score": v1_summary["metrics"]["avg_judge_score"],
-                "hit_rate": v1_summary["metrics"]["hit_rate"],
+                "score": comparison["v1_score"],
+                "hit_rate": comparison["v1_retrieval"]["hit_rate"],
+                "mrr": comparison["v1_retrieval"]["mrr"],
                 "judge_agreement": v1_summary["metrics"]["agreement_rate"]
             },
             "v2": {
-                "score": v2_summary["metrics"]["avg_judge_score"],
-                "hit_rate": v2_summary["metrics"]["hit_rate"],
+                "score": comparison["v2_score"],
+                "hit_rate": comparison["v2_retrieval"]["hit_rate"],
+                "mrr": comparison["v2_retrieval"]["mrr"],
                 "judge_agreement": v2_summary["metrics"]["agreement_rate"]
             },
+            "delta": {
+                "score": comparison["delta_score"],
+                "hit_rate": comparison["delta_hit_rate"],
+                "mrr": round(delta_mrr, 3)
+            },
             "decision": regression_decision
-        }
+        },
+        "diagnostics": diagnostics
     }
     
     # Format benchmark results with v1 and v2 comparison
